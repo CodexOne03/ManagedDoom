@@ -43,8 +43,13 @@ public class DoomHostControl : Form
 
     public DoomHostControl()
     {
-        this.BackColor = System.Drawing.Color.Black;
-        this.Resize += new EventHandler(DoomHostControl_Resize);
+        BackColor = System.Drawing.Color.Black;
+        FormBorderStyle = FormBorderStyle.None;
+        ShowInTaskbar = false;
+        StartPosition = FormStartPosition.Manual;
+        WindowState = FormWindowState.Normal;
+
+        Resize += DoomHostControl_Resize;
     }
 
     public void StartDoom(string exePath, string wadPath)
@@ -52,11 +57,15 @@ public class DoomHostControl : Form
         if (doomProcess != null && !doomProcess.HasExited)
             return;
 
-        ProcessStartInfo psi = new ProcessStartInfo();
-        psi.FileName = exePath;
-        psi.Arguments = "-iwad \"" + wadPath + "\"";
-        psi.UseShellExecute = false;
-        psi.WorkingDirectory = System.IO.Path.GetDirectoryName(exePath);
+        ProcessStartInfo psi = new ProcessStartInfo
+        {
+            FileName = exePath,
+            Arguments = "-iwad \"" + wadPath + "\"",
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            WindowStyle = ProcessWindowStyle.Hidden,
+            WorkingDirectory = System.IO.Path.GetDirectoryName(exePath)
+        };
 
         doomProcess = Process.Start(psi);
 

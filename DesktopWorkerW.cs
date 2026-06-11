@@ -6,15 +6,14 @@ namespace DesktopDoom
     public static class DesktopWorkerW
     {
         [DllImport("user32.dll", SetLastError = true)]
-        private static extern IntPtr FindWindow(string lpClassName, string lpWindowName);
+        private static extern IntPtr FindWindow(string lpClassName, string? lpWindowName);
 
         [DllImport("user32.dll", SetLastError = true)]
         private static extern IntPtr FindWindowEx(
             IntPtr hwndParent,
             IntPtr hwndChildAfter,
             string lpszClass,
-            string lpszWindow
-        );
+            string? lpszWindow);
 
         [DllImport("user32.dll", SetLastError = true)]
         public static extern IntPtr SetParent(IntPtr hWndChild, IntPtr hWndNewParent);
@@ -27,86 +26,124 @@ namespace DesktopDoom
             IntPtr lParam,
             uint fuFlags,
             uint uTimeout,
-            out IntPtr lpdwResult
-        );
+            out IntPtr lpdwResult);
 
         private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
 
         [DllImport("user32.dll")]
         private static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
 
-        private const uint SMTO_NORMAL = 0x0000;
         private const uint WM_SPAWN_WORKER = 0x052C;
-
-        public static IntPtr GetDesktopHost()
+        private const uint SMTO_NORMAL = 0x0000; private static IntPtr FindAnyEmptyWorkerW()
         {
-            IntPtr progman = FindWindow("Progman", null);
+            IntPtr result = IntPtr.Zero;
 
-            if (progman == IntPtr.Zero)
-                return IntPtr.Zero;
-
-            // Different Windows builds respond better to different parameter combos.
-            SendMessageTimeout(
-                progman,
-                WM_SPAWN_WORKER,
-                IntPtr.Zero,
-                IntPtr.Zero,
-                SMTO_NORMAL,
-                1000,
-                out _
-            );
-
-            SendMessageTimeout(
-                progman,
-                WM_SPAWN_WORKER,
-                new IntPtr(0xD),
-                IntPtr.Zero,
-                SMTO_NORMAL,
-                1000,
-                out _
-            );
-
-            SendMessageTimeout(
-                progman,
-                WM_SPAWN_WORKER,
-                new IntPtr(0xD),
-                new IntPtr(1),
-                SMTO_NORMAL,
-                1000,
-                out _
-            );
-
-            IntPtr workerW = IntPtr.Zero;
-
-            EnumWindows((topHandle, topParamHandle) =>
+            EnumWindows((top, _) =>
             {
-                IntPtr shellView = FindWindowEx(
-                    topHandle,
-                    IntPtr.Zero,
-                    "SHELLDLL_DefView",
-                    null
-                );
-
-                if (shellView != IntPtr.Zero)
+                if (GetWindowClass(top) == "WorkerW" &&
+                    FindWindowEx(top, IntPtr.Zero, "SHELLDLL_DefView", null) == IntPtr.Zero)
                 {
-                    // Try to get the WorkerW behind the icon layer
-                    workerW = FindWindowEx(
-                        IntPtr.Zero,
-                        topHandle,
-                        "WorkerW",
-                        null
-                    );
+                    result = top;
                 }
 
                 return true;
             }, IntPtr.Zero);
 
-            // Fallback: use Progman directly.
-            // This often works when Explorer does not create a separate WorkerW.
-            if (workerW == IntPtr.Zero)
-                workerW = progman;
+            return result;
+        }
 
-            return workerW;
+        public static IntPtr GetDesktopHost()
+        {
+            IntPtr progman = FindWindow("Progman", null);
+            if (progman == IntPtr.Zero)
+                return IntPtr.Zero;
+
+            SendMessageTimeout(
+                progman,
+                0x052C,
+                IntPtr.Zero,
+                IntPtr.Zero,
+                0,
+                1000,
+                out _);
+
+            // First try the classic layout:
+            // WorkerW -> SHELLDLL_DefView, followed by empty WorkerW.
+            IntPtr classicWorker = FindWorkerWBehindIcons();
+            if (classicWorker != IntPtr.Zero)
+                return classicWorker;
+
+            // Your layout:
+            // Progman -> SHELLDLL_DefView, many empty WorkerWs.
+            IntPtr emptyWorker = FindAnyEmptyWorkerW();
+            if (emptyWorker != IntPtr.Zero)
+                return emptyWorker;
+
+            // Do not blindly fall back to Progman.
+            return IntPtr.Zero;
+        }
+        private static IntPtr FindWorkerWBehindIcons()
+        {
+            IntPtr result = IntPtr.Zero;
+
+            EnumWindows((top, _) =>
+            {
+                IntPtr shellView = FindWindowEx(
+                    top,
+                    IntPtr.Zero,
+                    "SHELLDLL_DefView",
+                    null);
+
+                if (shellView != IntPtr.Zero)
+                {
+                    IntPtr worker = FindWindowEx(
+                        IntPtr.Zero,
+                        top,
+                        "WorkerW",
+                        null);
+
+                    if (worker != IntPtr.Zero)
+                    {
+                        result = worker;
+                        return false;
+                    }
+                }
+
+                return true;
+            }, IntPtr.Zero);
+
+            return result;
+        }
+
+        [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
+        private static extern int GetClassName(IntPtr hWnd, System.Text.StringBuilder lpClassName, int nMaxCount);
+
+        private static string GetWindowClass(IntPtr hWnd)
+        {
+            var sb = new System.Text.StringBuilder(256);
+            GetClassName(hWnd, sb, sb.Capacity);
+            return sb.ToString();
+        }
+
+        public static void DumpDesktopWindows()
+        {
+            EnumWindows((top, _) =>
+            {
+                string cls = GetWindowClass(top);
+
+                if (cls == "Progman" || cls == "WorkerW")
+                {
+                    IntPtr shell = FindWindowEx(top, IntPtr.Zero, "SHELLDLL_DefView", null);
+                    IntPtr list = shell == IntPtr.Zero
+                        ? IntPtr.Zero
+                        : FindWindowEx(shell, IntPtr.Zero, "SysListView32", null);
+
+                    System.Diagnostics.Debug.WriteLine(
+                        $"{top} {cls} ShellView={shell} ListView={list}");
+                }
+
+                return true;
+            }, IntPtr.Zero);
         }
     }
 }
