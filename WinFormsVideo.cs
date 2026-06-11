@@ -66,24 +66,19 @@ namespace DesktopDoom
 
         public void Render(Doom doom, Fixed frameFrac)
         {
-            // Fill bitmap from Doom screen/framebuffer.
-            // Look at SilkVideo.Render(...) and replace the OpenGL texture upload
-            // with Bitmap.LockBits(...) + copy pixels.
-
             if (doom == null)
-                throw new ArgumentNullException("doom");
+                throw new ArgumentNullException(nameof(doom));
 
             int width = bitmap.Width;
             int height = bitmap.Height;
 
-            byte[] screenData = renderer.screen.Data;
-            int pixelCount = screenData.Length;
-            int requiredBytes = pixelCount * 4; // 4 bytes per pixel for Format32bppArgb
+            int dstBytes = width * height * 4;
 
-            if (frameBuffer == null || frameBuffer.Length != requiredBytes)
-                frameBuffer = new byte[requiredBytes];
+            if (frameBuffer == null || frameBuffer.Length != dstBytes)
+                frameBuffer = new byte[dstBytes];
 
-            // Render Doom's software framebuffer into our 32-bit byte buffer.
+            // This must render exactly width * height pixels into frameBuffer.
+            // For Format32bppArgb, bytes should be: B, G, R, A.
             renderer.Render(doom, frameBuffer, frameFrac);
 
             BitmapData data = null;
@@ -102,14 +97,13 @@ namespace DesktopDoom
 
                 if (dstStride == srcStride)
                 {
-                    Marshal.Copy(frameBuffer, 0, data.Scan0, requiredBytes);
+                    Marshal.Copy(frameBuffer, 0, data.Scan0, dstBytes);
                 }
                 else
                 {
-                    // Bitmap stride can include padding, so copy row by row.
                     for (int y = 0; y < height; y++)
                     {
-                        IntPtr dst = new IntPtr(data.Scan0.ToInt32() + y * dstStride);
+                        IntPtr dst = IntPtr.Add(data.Scan0, y * dstStride);
                         int srcOffset = y * srcStride;
 
                         Marshal.Copy(frameBuffer, srcOffset, dst, srcStride);

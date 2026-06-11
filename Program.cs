@@ -30,31 +30,7 @@ namespace DesktopDoom
                 video.Paint();
                 Thread.Sleep(1000 / 35);
             }
-            while (false);
-
-            /*Application.EnableVisualStyles();
-            Application.SetCompatibleTextRenderingDefault(false);
-
-            IntPtr desktopHost = DesktopWorkerW.GetDesktopHost();
-
-            if (desktopHost == IntPtr.Zero)
-            {
-                MessageBox.Show("Could not find the safe WorkerW desktop host. Not attaching, to avoid hiding desktop icons.");
-                return;
-            }
-
-            DoomHostControl form = new DoomHostControl
-            {
-                Bounds = Screen.PrimaryScreen.Bounds
-            };
-
-            form.StartDoom(
-                @"C:\DoomHost\managed-doom.exe",
-                @"C:\DoomHost\doom1.wad");
-
-            DesktopWorkerW.SetParent(form.Handle, desktopHost);
-
-            Application.Run(form);*/
+            while (true);
         }
 
         private static void Start()
