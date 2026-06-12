@@ -8,46 +8,17 @@ namespace DesktopDoom
 {
     internal static class Program
     {
-        private static Doom doom;
-        private static WinFormsVideo video;
-
         /// <summary>
         ///  The main entry point for the application.
         /// </summary>
         [STAThread]
         static void Main(string[] args)
-        {/*
-            string path = Directory.GetCurrentDirectory() + @"\img.bmp";
-            Wallpaper.SetDesktopBackground(path);
-            return;*/
-            Start();
-            do
-            {
-                if (doom == null) return;
-
-                doom.Update();
-                video.Render(doom, Fixed.One);
-                video.Paint();
-                Thread.Sleep(1000 / 35);
-            }
-            while (true);
-        }
-
-        private static void Start()
         {
-            var args = new CommandLineArgs(new[]
-            {
-            "-iwad", @"C:\DoomHost\doom1.WAD",
-            "-nosound" // start here; add audio later
-        });
-
-            //var config = /* load config same as SilkConfigUtilities */;
-            var config = new Config();
-            var content = new GameContent(args);
-
-            video = new WinFormsVideo(config, content);
-
-            doom = new Doom(args, config, content, video, null, null, new NullUserInput());
+            Application.EnableVisualStyles();
+            Application.SetCompatibleTextRenderingDefault(false);
+            var form = new Form1();
+            form.Start(@"C:\DoomHost\doom1.WAD");
+            Application.Run(form);
         }
     }
 }

@@ -1,17 +1,17 @@
 ﻿using ManagedDoom;
 using ManagedDoom.Video;
 using System;
+using System.Collections.Generic;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
-using System.Windows.Forms;
 
 namespace DesktopDoom
 {
-    public sealed class WinFormsVideo : IVideo, IDisposable
+    public sealed class WinFormsVideo_old : IVideo, IDisposable
     {
-        private readonly Control owner;
-        private readonly Bitmap bitmap;
+        private Bitmap bitmap;
         private readonly Renderer renderer;
         private byte[] frameBuffer;
 
@@ -58,57 +58,71 @@ namespace DesktopDoom
         public int WipeBandCount => 321;
         public int WipeHeight => 200;
 
-        public WinFormsVideo(Control owner, Config config, GameContent content)
+        public WinFormsVideo_old(Config config, GameContent content)
         {
-            if (owner == null)
-                throw new ArgumentNullException("owner");
-
-            this.owner = owner;
-
-            // Doom internal screen size.
-            this.bitmap = new Bitmap(320, 200, PixelFormat.Format32bppArgb);
-
+            bitmap = new Bitmap(config.video_screenwidth, config.video_screenheight, PixelFormat.Format32bppArgb);
             this.renderer = new Renderer(config, content);
-            this.frameBuffer = new byte[320 * 200 * 4];
-        }
-
-        private static IntPtr AddIntPtr(IntPtr pointer, int offset)
-        {
-            if (IntPtr.Size == 8)
-                return new IntPtr(pointer.ToInt64() + offset);
-
-            return new IntPtr(pointer.ToInt32() + offset);
         }
 
         public void Render(Doom doom, Fixed frameFrac)
         {
             if (doom == null)
-                return;
+                throw new ArgumentNullException(nameof(doom));
 
             int width = bitmap.Width;
             int height = bitmap.Height;
 
-            int srcStride = width * 4;
-            int requiredBytes = srcStride * height;
+            int dstBytes = width * height * 4;
 
-            if (frameBuffer == null || frameBuffer.Length != requiredBytes)
-                frameBuffer = new byte[requiredBytes];
+            if (frameBuffer == null || frameBuffer.Length != dstBytes)
+                frameBuffer = new byte[dstBytes];
 
-            // Original renderer signature:
-            // Render(Doom doom, byte[] destination, Fixed frameFrac)
+            // This must render exactly width * height pixels into frameBuffer.
+            // For Format32bppArgb, bytes should be: B, G, R, A.
             renderer.Render(doom, frameBuffer, frameFrac);
+            bitmap = FrameToBitmap(frameBuffer, width, height);
 
-            FrameToBitmap(bitmap, frameBuffer, width, height);
+            /*BitmapData data = null;
 
-            owner.Invalidate();
+            try
+            {
+                Rectangle rect = new Rectangle(0, 0, width, height);
+
+                data = bitmap.LockBits(
+                    rect,
+                    ImageLockMode.WriteOnly,
+                    PixelFormat.Format32bppArgb);
+
+                int srcStride = width * 4;
+                int dstStride = data.Stride;
+
+                if (dstStride == srcStride)
+                {
+                    Marshal.Copy(frameBuffer, 0, data.Scan0, dstBytes);
+                }
+                else
+                {
+                    for (int y = 0; y < height; y++)
+                    {
+                        IntPtr dst = IntPtr.Add(data.Scan0, y * dstStride);
+                        int srcOffset = y * srcStride;
+
+                        Marshal.Copy(frameBuffer, srcOffset, dst, srcStride);
+                    }
+                }
+            }
+            finally
+            {
+                if (data != null)
+                    bitmap.UnlockBits(data);
+            }*/
         }
 
-        bool first = true;
-        Bitmap FrameToBitmap(Bitmap bmp, byte[] frame, int width, int height)
+        static Bitmap FrameToBitmap(byte[] frame, int width, int height)
         {
             // frame is ManagedDoom order: (x * height + y) * 4
             // Bitmap wants row order: y rows, then x columns.
-            //var bmp = new Bitmap(width, height, PixelFormat.Format32bppArgb);
+            var bmp = new Bitmap(width, height, PixelFormat.Format32bppArgb);
 
             var rect = new Rectangle(0, 0, width, height);
             var data = bmp.LockBits(rect, ImageLockMode.WriteOnly, PixelFormat.Format32bppArgb);
@@ -130,9 +144,9 @@ namespace DesktopDoom
 
                             // If your source is already BGRA, copy 0,1,2,3 directly.
                             // If red/blue are swapped, use the mapping below.
-                            dst[di + 0] = frame[src + 0]; // B
+                            dst[di + 0] = frame[src + 2]; // B
                             dst[di + 1] = frame[src + 1]; // G
-                            dst[di + 2] = frame[src + 2]; // R
+                            dst[di + 2] = frame[src + 0]; // R
                             dst[di + 3] = frame[src + 3]; // A
                         }
                     }
@@ -143,27 +157,16 @@ namespace DesktopDoom
                 bmp.UnlockBits(data);
             }
 
-            if (first)
-            {
-                bitmap.Save("img.bmp");
-                first = false;
-            }
             return bmp;
         }
 
-        public void Paint(Graphics g, Rectangle destination)
+        public void Paint()
         {
-            if (g == null)
-                return;
-
-            g.InterpolationMode =
-                System.Drawing.Drawing2D.InterpolationMode.NearestNeighbor;
-
-            g.PixelOffsetMode =
-                System.Drawing.Drawing2D.PixelOffsetMode.Half;
-
-            g.DrawImage(bitmap, destination);
+            string path = Directory.GetCurrentDirectory() + @"\img.bmp";
+            bitmap.Save(path);
+            Wallpaper.SetDesktopBackground(path);
         }
+
         public void Resize(int width, int height)
         {
         }
@@ -175,7 +178,7 @@ namespace DesktopDoom
 
         void IVideo.InitializeWipe()
         {
-
+            
         }
 
         bool IVideo.HasFocus()
